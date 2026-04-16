@@ -1,0 +1,8 @@
+name: ScrapeDiff
+description: Live word-level diff overlay for the Details/Synopsis field in Stash scrape result modals.
+version: 1.0.0
+ui:
+  javascript:
+    - ScrapeDiff.js
+  css:
+    - ScrapeDiff.css
