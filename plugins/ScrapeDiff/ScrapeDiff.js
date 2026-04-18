@@ -81,12 +81,14 @@
 
   // ── Overlay DOM ─────────────────────────────────────────────────────────────
 
-  function createOverlayDOM(ta) {
+  function createOverlay(ta) {
     // font-kerning must be disabled on the textarea before measuring clientWidth,
     // so the content div's width is calculated from the same kerning state.
     ta.style.fontKerning = "none";
 
     const cs = window.getComputedStyle(ta);
+    const padLeft  = parseFloat(cs.paddingLeft);
+    const padRight = parseFloat(cs.paddingRight);
 
     // Clip div: constrains diff highlights to the textarea's visual boundary.
     // clip-path instead of overflow:hidden to avoid creating a scroll container.
@@ -102,11 +104,10 @@
 
     // Content div: mirrors textarea typography so tokens land on the same pixels.
     const content = document.createElement("div");
-    const contentWidth = ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     content.className = "scrape-diff-content";
-    content.style.top = cs.paddingTop;
-    content.style.left = cs.paddingLeft;
-    content.style.width = `${contentWidth}px`;
+    content.style.top   = cs.paddingTop;
+    content.style.left  = cs.paddingLeft;
+    content.style.width = `${ta.clientWidth - padLeft - padRight}px`;
     for (const prop of [
       "fontFamily", "fontSize", "fontWeight", "fontStyle",
       "lineHeight", "letterSpacing", "wordSpacing", "tabSize", "wordBreak",
@@ -115,13 +116,11 @@
     }
 
     clip.appendChild(content);
-    return { clip, content };
+    return { clip, content, totalPadding: padLeft + padRight };
   }
 
-  function syncContentWidth(ta, content) {
-    const cs = window.getComputedStyle(ta);
-    const pureWidth = ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-    content.style.width = `${pureWidth}px`;
+  function syncContentWidth(ta, content, totalPadding) {
+    content.style.width = `${ta.clientWidth - totalPadding}px`;
   }
 
   // ── Tag diff ────────────────────────────────────────────────────────────────
@@ -175,13 +174,13 @@
     const oldWrapper = setupTextarea(existingTA, "old");
     const newWrapper = setupTextarea(scrapedTA, "new");
 
-    const { clip: oldClip, content: oldContent } = createOverlayDOM(existingTA);
-    const { clip: newClip, content: newContent } = createOverlayDOM(scrapedTA);
+    const { clip: oldClip, content: oldContent, totalPadding: oldPad } = createOverlay(existingTA);
+    const { clip: newClip, content: newContent, totalPadding: newPad } = createOverlay(scrapedTA);
     oldWrapper.appendChild(oldClip);
     newWrapper.appendChild(newClip);
 
-    syncContentWidth(existingTA, oldContent);
-    syncContentWidth(scrapedTA, newContent);
+    syncContentWidth(existingTA, oldContent, oldPad);
+    syncContentWidth(scrapedTA,  newContent, newPad);
 
     const update = () => {
       if (!existingTA.value) return;
@@ -206,8 +205,8 @@
 
     let isSyncing = false;
     const ro = new ResizeObserver((entries) => {
-      syncContentWidth(existingTA, oldContent);
-      syncContentWidth(scrapedTA, newContent);
+      syncContentWidth(existingTA, oldContent, oldPad);
+      syncContentWidth(scrapedTA,  newContent, newPad);
       if (!isSyncing) {
         isSyncing = true;
         for (const entry of entries) {
