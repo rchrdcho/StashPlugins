@@ -24,12 +24,14 @@ Highlights what changed between your existing data and the scraped result in Sta
    - **Source URL:** `https://rchrdcho.github.io/StashPlugins/main/index.yml`
 3. Find **ScrapeDiff** in the list, check the box, and click **Install**
 4. Click **Reload Plugins**
+5. Refresh the page
 
 ### Manual install
 
 1. Clone this repository, or download it as a ZIP and unzip it
 2. Copy the `ScrapeDiff` folder into your Stash plugins directory (default: `~/.stash/plugins/`)
 3. Go to **Settings → Plugins** and click **Reload Plugins**
+4. Refresh the page
 
 ## Usage
 
