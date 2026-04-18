@@ -30,7 +30,6 @@ Highlights what changed between your existing data and the scraped result in Sta
 1. Clone this repository, or download it as a ZIP and unzip it
 2. Copy the `ScrapeDiff` folder into your Stash plugins directory (default: `~/.stash/plugins/`)
 3. Go to **Settings → Plugins** and click **Reload Plugins**
-4. Enable **ScrapeDiff**
 
 ## Usage
 
@@ -40,5 +39,5 @@ No configuration required.
 
 ## Notes
 
-- Skips rendering when the existing field is empty (new data, nothing to diff against)
+- Skips the Details/Synopsis diff when the existing field is empty (new data, nothing to diff against)
 - Cleans up all event listeners and observers when the modal closes
