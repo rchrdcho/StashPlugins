@@ -73,7 +73,6 @@
     ta.parentNode.insertBefore(wrapper, ta);
     wrapper.appendChild(ta);
 
-    // Keep the text cursor visible on the editable (scraped) side.
     if (side === "new") ta.style.caretColor = cs.color;
 
     return wrapper;
@@ -90,7 +89,6 @@
     const padLeft  = parseFloat(cs.paddingLeft);
     const padRight = parseFloat(cs.paddingRight);
 
-    // Clip div: constrains diff highlights to the textarea's visual boundary.
     // clip-path instead of overflow:hidden to avoid creating a scroll container.
     const clip = document.createElement("div");
     clip.className = "scrape-diff-clip";
@@ -102,7 +100,6 @@
       `clip-path:inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`,
     ].join(";");
 
-    // Content div: mirrors textarea typography so tokens land on the same pixels.
     const content = document.createElement("div");
     content.className = "scrape-diff-content";
     content.style.top   = cs.paddingTop;
