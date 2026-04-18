@@ -124,93 +124,139 @@
     content.style.width = `${pureWidth}px`;
   }
 
+  // ── Tag diff ────────────────────────────────────────────────────────────────
+
+  function getNamedChips(col) {
+    return [...col.querySelectorAll(".react-select__multi-value")]
+      .map((chip) => ({
+        chip,
+        name: chip.querySelector(".react-select__multi-value__label span")?.textContent.trim() || "",
+      }))
+      .filter((e) => e.name);
+  }
+
+  function applyTagDiff(existingCol, scrapedCol) {
+    const existingEntries = getNamedChips(existingCol);
+    const scrapedEntries  = getNamedChips(scrapedCol);
+    const existingNames   = new Set(existingEntries.map((e) => e.name));
+    const scrapedNames    = new Set(scrapedEntries.map((e) => e.name));
+
+    for (const { chip, name } of existingEntries)
+      chip.classList.toggle("sd-tag-removed", !scrapedNames.has(name));
+    for (const { chip, name } of scrapedEntries)
+      chip.classList.toggle("sd-tag-added", !existingNames.has(name));
+  }
+
+  function setupTagDiff(tagsField, cleanupFns) {
+    const cols = [...tagsField.querySelectorAll("div.col-lg-9 > div.row > div.col-lg-6")];
+    if (cols.length < 2) return;
+
+    const [existingCol, scrapedCol] = cols;
+
+    applyTagDiff(existingCol, scrapedCol);
+
+    // Re-apply whenever either side changes (late chip render or user removes a tag)
+    const mo = new MutationObserver(() => applyTagDiff(existingCol, scrapedCol));
+    mo.observe(existingCol, { childList: true, subtree: true });
+    mo.observe(scrapedCol,  { childList: true, subtree: true });
+    cleanupFns.push(() => mo.disconnect());
+  }
+
   // ── Orchestration ───────────────────────────────────────────────────────────
 
   let pollId = null;
 
   function trySetup() {
-    // Locate targets — bail out if modal or required fields are absent
     const modal = document.querySelector(".modal-content");
     if (!modal) return false;
 
     const detailsField = modal.querySelector("[data-field='details'], [data-field='synopsis']");
-    if (!detailsField) return false;
+    const tagsField    = modal.querySelector("[data-field='tags']");
+    if (!detailsField && !tagsField) return false;
 
-    const cols = [...detailsField.querySelectorAll("div.col-lg-6")];
-    if (cols.length < 2) return false;
+    // Already initialized — signal success so polling stops
+    if (modal.dataset.scrapeDiffInitialized) return true;
+    modal.dataset.scrapeDiffInitialized = "true";
 
-    const existingTA = cols[0].querySelector("textarea");
-    const scrapedTA = cols[1].querySelector("textarea");
-    if (!existingTA || !scrapedTA || existingTA.dataset.diffInitialized) return false;
+    const cleanupFns = [];
 
-    existingTA.dataset.diffInitialized = "true";
-    scrapedTA.dataset.diffInitialized = "true";
+    if (detailsField) {
+      const cols = [...detailsField.querySelectorAll("div.col-lg-6")];
+      if (cols.length >= 2) {
+        const existingTA = cols[0].querySelector("textarea");
+        const scrapedTA = cols[1].querySelector("textarea");
 
-    // Mount: wrap textareas, create overlays, attach to wrappers
-    const oldWrapper = setupTextarea(existingTA, "old");
-    const newWrapper = setupTextarea(scrapedTA, "new");
+        if (existingTA && scrapedTA) {
+          // Mount: wrap textareas, create overlays, attach to wrappers
+          const oldWrapper = setupTextarea(existingTA, "old");
+          const newWrapper = setupTextarea(scrapedTA, "new");
 
-    const { clip: oldClip, content: oldContent } = createOverlayDOM(existingTA);
-    const { clip: newClip, content: newContent } = createOverlayDOM(scrapedTA);
-    oldWrapper.appendChild(oldClip);
-    newWrapper.appendChild(newClip);
+          const { clip: oldClip, content: oldContent } = createOverlayDOM(existingTA);
+          const { clip: newClip, content: newContent } = createOverlayDOM(scrapedTA);
+          oldWrapper.appendChild(oldClip);
+          newWrapper.appendChild(newClip);
 
-    // Initial render: sync widths then render first diff
-    syncContentWidth(existingTA, oldContent);
-    syncContentWidth(scrapedTA, newContent);
+          // Initial render: sync widths then render first diff
+          syncContentWidth(existingTA, oldContent);
+          syncContentWidth(scrapedTA, newContent);
 
-    function update() {
-      if (!existingTA.value) return;
-      const tokens = wordDiff(existingTA.value, scrapedTA.value);
-      renderDiff(oldContent, tokens, "old");
-      renderDiff(newContent, tokens, "new");
-    }
-    update();
+          function update() {
+            if (!existingTA.value) return;
+            const tokens = wordDiff(existingTA.value, scrapedTA.value);
+            renderDiff(oldContent, tokens, "old");
+            renderDiff(newContent, tokens, "new");
+          }
+          update();
 
-    // Input: re-render diff after user stops typing
-    let debounceId = null;
-    const onInput = () => {
-      clearTimeout(debounceId);
-      debounceId = setTimeout(update, DEBOUNCE_MS);
-    };
+          // Input: re-render diff after user stops typing
+          let debounceId = null;
+          const onInput = () => {
+            clearTimeout(debounceId);
+            debounceId = setTimeout(update, DEBOUNCE_MS);
+          };
 
-    // Scroll: sync overlay position via transform (clip-path ≠ scroll container)
-    const onExistingScroll = () => { oldContent.style.transform = `translateY(-${existingTA.scrollTop}px)`; };
-    const onScrapedScroll = () => { newContent.style.transform = `translateY(-${scrapedTA.scrollTop}px)`; };
+          // Scroll: sync overlay position via transform (clip-path ≠ scroll container)
+          const onExistingScroll = () => { oldContent.style.transform = `translateY(-${existingTA.scrollTop}px)`; };
+          const onScrapedScroll = () => { newContent.style.transform = `translateY(-${scrapedTA.scrollTop}px)`; };
 
-    scrapedTA.addEventListener("input", onInput);
-    existingTA.addEventListener("scroll", onExistingScroll);
-    scrapedTA.addEventListener("scroll", onScrapedScroll);
+          scrapedTA.addEventListener("input", onInput);
+          existingTA.addEventListener("scroll", onExistingScroll);
+          scrapedTA.addEventListener("scroll", onScrapedScroll);
 
-    // Resize: sync overlay widths and mirror height between the two panes
-    let isSyncing = false;
-    const ro = new ResizeObserver((entries) => {
-      syncContentWidth(existingTA, oldContent);
-      syncContentWidth(scrapedTA, newContent);
+          // Resize: sync overlay widths and mirror height between the two panes
+          let isSyncing = false;
+          const ro = new ResizeObserver((entries) => {
+            syncContentWidth(existingTA, oldContent);
+            syncContentWidth(scrapedTA, newContent);
 
-      if (!isSyncing) {
-        isSyncing = true;
-        for (const entry of entries) {
-          if (entry.target === existingTA) scrapedTA.style.height = `${existingTA.offsetHeight}px`;
-          else if (entry.target === scrapedTA) existingTA.style.height = `${scrapedTA.offsetHeight}px`;
+            if (!isSyncing) {
+              isSyncing = true;
+              for (const entry of entries) {
+                if (entry.target === existingTA) scrapedTA.style.height = `${existingTA.offsetHeight}px`;
+                else if (entry.target === scrapedTA) existingTA.style.height = `${scrapedTA.offsetHeight}px`;
+              }
+              isSyncing = false;
+            }
+          });
+          ro.observe(existingTA);
+          ro.observe(scrapedTA);
+
+          cleanupFns.push(() => {
+            ro.disconnect();
+            clearTimeout(debounceId);
+            scrapedTA.removeEventListener("input", onInput);
+            existingTA.removeEventListener("scroll", onExistingScroll);
+            scrapedTA.removeEventListener("scroll", onScrapedScroll);
+          });
         }
-        isSyncing = false;
       }
-    });
-    ro.observe(existingTA);
-    ro.observe(scrapedTA);
-
-    // Cleanup: disconnect observers and remove listeners when modal closes
-    function cleanup() {
-      ro.disconnect();
-      clearTimeout(debounceId);
-      scrapedTA.removeEventListener("input", onInput);
-      existingTA.removeEventListener("scroll", onExistingScroll);
-      scrapedTA.removeEventListener("scroll", onScrapedScroll);
     }
+
+    if (tagsField) setupTagDiff(tagsField, cleanupFns);
+
     const closeObserver = new MutationObserver(() => {
       if (!modal.isConnected) {
-        cleanup();
+        cleanupFns.forEach((fn) => fn());
         closeObserver.disconnect();
       }
     });
