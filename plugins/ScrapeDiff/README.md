@@ -1,13 +1,14 @@
 # ScrapeDiff
 
-Renders a live word-level diff overlay on the Details/Synopsis field in Stash's scrape result modals, making it immediately clear what changed between your existing data and the scraped result.
+Highlights what changed between your existing data and the scraped result in Stash scrape result modals — word-level diff on Details/Synopsis text, and added/removed color coding on tags.
 
 ![ScrapeDiff in Scene scrape modal](assets/scene-scrape.png)
 
 ## Features
 
-- Word-level diff with red (removed) and green (added) highlights
-- Targets the Details/Synopsis field across Scene, Gallery, Performer, and Group scrape modals — the one field long enough to actually need a diff
+- Word-level diff with red (removed) and green (added) highlights on Details/Synopsis
+- Tag diff highlighting — removed tags turn red, added tags turn green
+- Works across Scene, Gallery, Performer, and Group scrape modals
 - Synchronized height resize — drag either textarea and the other follows
 - Scroll-synced overlays
 - Debounced live update as you edit the scraped field
@@ -15,13 +16,25 @@ Renders a live word-level diff overlay on the Details/Synopsis field in Stash's 
 
 ## Installation
 
-1. Download or clone this repository and copy the `ScrapeDiff` folder into your Stash plugins directory (default: `~/.stash/plugins/`)
-2. Go to **Settings → Plugins** and click **Reload Plugins**
-3. Enable **ScrapeDiff**
+### Via Stash (recommended)
+
+1. Go to **Settings → Plugins → Available Plugins**
+2. Click **Add Source** and fill in:
+   - **Name:** anything you like (e.g. `rchrdcho`)
+   - **Source URL:** `https://rchrdcho.github.io/StashPlugins/main/index.yml`
+3. Find **ScrapeDiff** in the list, check the box, and click **Install**
+4. Click **Reload Plugins**
+
+### Manual install
+
+1. Clone this repository, or download it as a ZIP and unzip it
+2. Copy the `ScrapeDiff` folder into your Stash plugins directory (default: `~/.stash/plugins/`)
+3. Go to **Settings → Plugins** and click **Reload Plugins**
+4. Enable **ScrapeDiff**
 
 ## Usage
 
-Open any scrape result modal. The Details or Synopsis field will automatically display a diff between the existing value and the scraped value.
+Open any scrape result modal. The Details/Synopsis field will display a word-level diff, and the Tags field will highlight which tags are new or removed.
 
 No configuration required.
 

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  console.log("[ScrapeDiff] loaded");
+  console.log("[ScrapeDiff] v1.1.0 loaded");
 
   // ── Constants ───────────────────────────────────────────────────────────────
 
