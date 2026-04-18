@@ -162,6 +162,73 @@
     cleanupFns.push(() => mo.disconnect());
   }
 
+  // ── Text diff ───────────────────────────────────────────────────────────────
+
+  function setupTextDiff(detailsField, cleanupFns) {
+    const cols = [...detailsField.querySelectorAll("div.col-lg-9 > div.row > div.col-lg-6")];
+    if (cols.length < 2) return;
+
+    const existingTA = cols[0].querySelector("textarea");
+    const scrapedTA  = cols[1].querySelector("textarea");
+    if (!existingTA || !scrapedTA) return;
+
+    const oldWrapper = setupTextarea(existingTA, "old");
+    const newWrapper = setupTextarea(scrapedTA, "new");
+
+    const { clip: oldClip, content: oldContent } = createOverlayDOM(existingTA);
+    const { clip: newClip, content: newContent } = createOverlayDOM(scrapedTA);
+    oldWrapper.appendChild(oldClip);
+    newWrapper.appendChild(newClip);
+
+    syncContentWidth(existingTA, oldContent);
+    syncContentWidth(scrapedTA, newContent);
+
+    const update = () => {
+      if (!existingTA.value) return;
+      const tokens = wordDiff(existingTA.value, scrapedTA.value);
+      renderDiff(oldContent, tokens, "old");
+      renderDiff(newContent, tokens, "new");
+    };
+    update();
+
+    let debounceId = null;
+    const onInput = () => {
+      clearTimeout(debounceId);
+      debounceId = setTimeout(update, DEBOUNCE_MS);
+    };
+
+    const onExistingScroll = () => { oldContent.style.transform = `translateY(-${existingTA.scrollTop}px)`; };
+    const onScrapedScroll  = () => { newContent.style.transform = `translateY(-${scrapedTA.scrollTop}px)`; };
+
+    scrapedTA.addEventListener("input", onInput);
+    existingTA.addEventListener("scroll", onExistingScroll);
+    scrapedTA.addEventListener("scroll", onScrapedScroll);
+
+    let isSyncing = false;
+    const ro = new ResizeObserver((entries) => {
+      syncContentWidth(existingTA, oldContent);
+      syncContentWidth(scrapedTA, newContent);
+      if (!isSyncing) {
+        isSyncing = true;
+        for (const entry of entries) {
+          if (entry.target === existingTA) scrapedTA.style.height = `${existingTA.offsetHeight}px`;
+          else if (entry.target === scrapedTA) existingTA.style.height = `${scrapedTA.offsetHeight}px`;
+        }
+        isSyncing = false;
+      }
+    });
+    ro.observe(existingTA);
+    ro.observe(scrapedTA);
+
+    cleanupFns.push(() => {
+      ro.disconnect();
+      clearTimeout(debounceId);
+      scrapedTA.removeEventListener("input", onInput);
+      existingTA.removeEventListener("scroll", onExistingScroll);
+      scrapedTA.removeEventListener("scroll", onScrapedScroll);
+    });
+  }
+
   // ── Orchestration ───────────────────────────────────────────────────────────
 
   let pollId = null;
@@ -179,80 +246,8 @@
     modal.dataset.scrapeDiffInitialized = "true";
 
     const cleanupFns = [];
-
-    if (detailsField) {
-      const cols = [...detailsField.querySelectorAll("div.col-lg-6")];
-      if (cols.length >= 2) {
-        const existingTA = cols[0].querySelector("textarea");
-        const scrapedTA = cols[1].querySelector("textarea");
-
-        if (existingTA && scrapedTA) {
-          // Mount: wrap textareas, create overlays, attach to wrappers
-          const oldWrapper = setupTextarea(existingTA, "old");
-          const newWrapper = setupTextarea(scrapedTA, "new");
-
-          const { clip: oldClip, content: oldContent } = createOverlayDOM(existingTA);
-          const { clip: newClip, content: newContent } = createOverlayDOM(scrapedTA);
-          oldWrapper.appendChild(oldClip);
-          newWrapper.appendChild(newClip);
-
-          // Initial render: sync widths then render first diff
-          syncContentWidth(existingTA, oldContent);
-          syncContentWidth(scrapedTA, newContent);
-
-          function update() {
-            if (!existingTA.value) return;
-            const tokens = wordDiff(existingTA.value, scrapedTA.value);
-            renderDiff(oldContent, tokens, "old");
-            renderDiff(newContent, tokens, "new");
-          }
-          update();
-
-          // Input: re-render diff after user stops typing
-          let debounceId = null;
-          const onInput = () => {
-            clearTimeout(debounceId);
-            debounceId = setTimeout(update, DEBOUNCE_MS);
-          };
-
-          // Scroll: sync overlay position via transform (clip-path ≠ scroll container)
-          const onExistingScroll = () => { oldContent.style.transform = `translateY(-${existingTA.scrollTop}px)`; };
-          const onScrapedScroll = () => { newContent.style.transform = `translateY(-${scrapedTA.scrollTop}px)`; };
-
-          scrapedTA.addEventListener("input", onInput);
-          existingTA.addEventListener("scroll", onExistingScroll);
-          scrapedTA.addEventListener("scroll", onScrapedScroll);
-
-          // Resize: sync overlay widths and mirror height between the two panes
-          let isSyncing = false;
-          const ro = new ResizeObserver((entries) => {
-            syncContentWidth(existingTA, oldContent);
-            syncContentWidth(scrapedTA, newContent);
-
-            if (!isSyncing) {
-              isSyncing = true;
-              for (const entry of entries) {
-                if (entry.target === existingTA) scrapedTA.style.height = `${existingTA.offsetHeight}px`;
-                else if (entry.target === scrapedTA) existingTA.style.height = `${scrapedTA.offsetHeight}px`;
-              }
-              isSyncing = false;
-            }
-          });
-          ro.observe(existingTA);
-          ro.observe(scrapedTA);
-
-          cleanupFns.push(() => {
-            ro.disconnect();
-            clearTimeout(debounceId);
-            scrapedTA.removeEventListener("input", onInput);
-            existingTA.removeEventListener("scroll", onExistingScroll);
-            scrapedTA.removeEventListener("scroll", onScrapedScroll);
-          });
-        }
-      }
-    }
-
-    if (tagsField) setupTagDiff(tagsField, cleanupFns);
+    if (detailsField) setupTextDiff(detailsField, cleanupFns);
+    if (tagsField)    setupTagDiff(tagsField, cleanupFns);
 
     const closeObserver = new MutationObserver(() => {
       if (!modal.isConnected) {
