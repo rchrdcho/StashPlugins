@@ -42,4 +42,5 @@ No configuration required.
 ## Notes
 
 - Skips the Details/Synopsis diff when the existing field is empty (new data, nothing to diff against)
+- Skips the Tags diff when the existing tags field is empty (new data, nothing to diff against)
 - Cleans up all event listeners and observers when the modal closes

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  console.log("[ScrapeDiff] v1.1.0 loaded");
+  console.log("[ScrapeDiff] v1.1.1 loaded");
 
   // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -134,8 +134,15 @@
   function applyTagDiff(existingCol, scrapedCol) {
     const existingEntries = getNamedChips(existingCol);
     const scrapedEntries  = getNamedChips(scrapedCol);
-    const existingNames   = new Set(existingEntries.map((e) => e.name));
-    const scrapedNames    = new Set(scrapedEntries.map((e) => e.name));
+
+    if (!existingEntries.length) {
+      for (const { chip } of scrapedEntries)
+        chip.classList.remove("sd-tag-added");
+      return;
+    }
+
+    const existingNames = new Set(existingEntries.map((e) => e.name));
+    const scrapedNames  = new Set(scrapedEntries.map((e) => e.name));
 
     for (const { chip, name } of existingEntries)
       chip.classList.toggle("sd-tag-removed", !scrapedNames.has(name));
