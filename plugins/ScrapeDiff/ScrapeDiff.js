@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  console.log("[ScrapeDiff] v1.1.1 loaded");
+  console.log("[ScrapeDiff] v1.2.0 loaded");
 
   // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -16,26 +16,44 @@
 
   function wordDiff(oldText, newText) {
     const a = tokenize(oldText), b = tokenize(newText);
-    const m = a.length, n = b.length;
-    const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
-    for (let i = 1; i <= m; i++)
-      for (let j = 1; j <= n; j++)
-        dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+
+    // Skip common prefix
+    let lo = 0;
+    while (lo < a.length && lo < b.length && a[lo] === b[lo]) lo++;
+
+    // Skip common suffix (never crosses the prefix boundary)
+    let hiA = a.length, hiB = b.length;
+    while (hiA > lo && hiB > lo && a[hiA - 1] === b[hiB - 1]) { hiA--; hiB--; }
+
+    const ca = a.slice(lo, hiA), cb = b.slice(lo, hiB);
+    const cm = ca.length, cn = cb.length;
+
+    const prefix = a.slice(0, lo).map((t) => ({ text: t, type: "same" }));
+    const suffix = a.slice(hiA).map((t) => ({ text: t, type: "same" }));
+
+    if (cm === 0 && cn === 0) return [...prefix, ...suffix];
+
+    // LCS only on the differing core
+    const dp = Array.from({ length: cm + 1 }, () => new Int32Array(cn + 1));
+    for (let i = 1; i <= cm; i++)
+      for (let j = 1; j <= cn; j++)
+        dp[i][j] = ca[i - 1] === cb[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
 
     // Traceback with push+reverse avoids O(n²) cost of repeated unshift
     const ops = [];
-    let i = m, j = n;
+    let i = cm, j = cn;
     while (i > 0 || j > 0) {
-      if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-        ops.push({ text: a[i - 1], type: "same" }); i--; j--;
+      if (i > 0 && j > 0 && ca[i - 1] === cb[j - 1]) {
+        ops.push({ text: ca[i - 1], type: "same" }); i--; j--;
       } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        ops.push({ text: b[j - 1], type: "added" }); j--;
+        ops.push({ text: cb[j - 1], type: "added" }); j--;
       } else {
-        ops.push({ text: a[i - 1], type: "removed" }); i--;
+        ops.push({ text: ca[i - 1], type: "removed" }); i--;
       }
     }
     ops.reverse();
-    return ops;
+
+    return [...prefix, ...ops, ...suffix];
   }
 
   // ── DOM rendering ───────────────────────────────────────────────────────────
@@ -158,7 +176,7 @@
 
     applyTagDiff(existingCol, scrapedCol);
 
-    // Re-apply whenever either side changes (late chip render or user removes a tag)
+    // Re-apply whenever either side changes (late chip render or scraped tag removed by user)
     const mo = new MutationObserver(() => applyTagDiff(existingCol, scrapedCol));
     mo.observe(existingCol, { childList: true, subtree: true });
     mo.observe(scrapedCol,  { childList: true, subtree: true });
