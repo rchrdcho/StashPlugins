@@ -1,12 +1,13 @@
 (() => {
   "use strict";
 
-  console.log("[ScrapeDiff] v1.2.0 loaded");
+  console.log("[ScrapeDiff] v1.2.1 loaded");
 
   // ── Constants ───────────────────────────────────────────────────────────────
 
   const POLL_INTERVAL_MS = 100;
   const DEBOUNCE_MS = 150;
+  const DEBUG = false;
 
   // ── Diff computation ────────────────────────────────────────────────────────
 
@@ -60,20 +61,23 @@
 
   function renderDiff(el, tokens, side) {
     const fragment = document.createDocumentFragment();
+    let sameBuf = "";
     for (const t of tokens) {
       if (side === "old" && t.type === "added") continue;
       if (side === "new" && t.type === "removed") continue;
 
       if (t.type === "same") {
-        fragment.appendChild(document.createTextNode(t.text));
+        sameBuf += t.text;
         continue;
       }
 
+      if (sameBuf) { fragment.appendChild(document.createTextNode(sameBuf)); sameBuf = ""; }
       const span = document.createElement("span");
       span.textContent = t.text;
       span.className = t.type;
       fragment.appendChild(span);
     }
+    if (sameBuf) fragment.appendChild(document.createTextNode(sameBuf));
     el.replaceChildren(fragment);
   }
 
@@ -122,7 +126,8 @@
     content.className = "scrape-diff-content";
     content.style.top   = cs.paddingTop;
     content.style.left  = cs.paddingLeft;
-    content.style.width = `${ta.clientWidth - padLeft - padRight}px`;
+    const frac = ta.getBoundingClientRect().width - ta.offsetWidth;
+    content.style.width = `${ta.clientWidth - padLeft - padRight + frac}px`;
     for (const prop of [
       "fontFamily", "fontSize", "fontWeight", "fontStyle",
       "lineHeight", "letterSpacing", "wordSpacing", "tabSize", "wordBreak",
@@ -130,12 +135,15 @@
       content.style[prop] = cs[prop];
     }
 
+    if (DEBUG) content.style.color = "rgba(0, 220, 255, 0.6)";
+
     clip.appendChild(content);
     return { clip, content, totalPadding: padLeft + padRight };
   }
 
   function syncContentWidth(ta, content, totalPadding) {
-    content.style.width = `${ta.clientWidth - totalPadding}px`;
+    const frac = ta.getBoundingClientRect().width - ta.offsetWidth;
+    content.style.width = `${ta.clientWidth - totalPadding + frac}px`;
   }
 
   // ── Tag diff ────────────────────────────────────────────────────────────────
