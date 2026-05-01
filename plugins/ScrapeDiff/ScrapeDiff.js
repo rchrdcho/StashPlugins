@@ -1,13 +1,48 @@
 (() => {
   "use strict";
 
-  console.log("[ScrapeDiff] v1.2.2 loaded");
+  console.log("[ScrapeDiff] v1.3.0 loaded");
 
   // ── Constants ───────────────────────────────────────────────────────────────
 
   const POLL_INTERVAL_MS = 100;
   const DEBOUNCE_MS = 150;
-  const DEBUG = false;
+
+  // ── Debug system ────────────────────────────────────────────────────────────
+
+  // Use window.__scrapeDiffDebug = true to turn on debug mode
+  let _debug = false;
+  Object.defineProperty(window, "__scrapeDiffDebug", {
+    get: () => _debug,
+    set: (v) => {
+      _debug = !!v;
+      for (const el of document.querySelectorAll(".scrape-diff-content"))
+        el.classList.toggle("sd-debug-content", _debug);
+      console.log(`[ScrapeDiff] debug mode ${_debug ? "ON" : "OFF"}`);
+    },
+    configurable: true,
+  });
+
+  function log(tag, ...args) {
+    if (_debug) console.log(`[ScrapeDiff] ${tag}:`, ...args);
+  }
+
+  function time(label) {
+    if (_debug) console.time(`[ScrapeDiff] ${label}`);
+  }
+
+  function timeEnd(label) {
+    if (_debug) console.timeEnd(`[ScrapeDiff] ${label}`);
+  }
+
+  function stats(tokens) {
+    if (!_debug) return;
+    const counts = tokens.reduce(
+      (acc, t) => { acc[t.type]++; return acc; },
+      { same: 0, added: 0, removed: 0 }
+    );
+    console.table([{ ...counts, total: tokens.length }]);
+  }
 
   // ── Diff computation ────────────────────────────────────────────────────────
 
@@ -24,7 +59,10 @@
 
     // Skip common suffix (never crosses the prefix boundary)
     let hiA = a.length, hiB = b.length;
-    while (hiA > lo && hiB > lo && a[hiA - 1] === b[hiB - 1]) { hiA--; hiB--; }
+    while (hiA > lo && hiB > lo && a[hiA - 1] === b[hiB - 1]) {
+      hiA--;
+      hiB--;
+    }
 
     const ca = a.slice(lo, hiA), cb = b.slice(lo, hiB);
     const cm = ca.length, cn = cb.length;
@@ -45,11 +83,15 @@
     let i = cm, j = cn;
     while (i > 0 || j > 0) {
       if (i > 0 && j > 0 && ca[i - 1] === cb[j - 1]) {
-        ops.push({ text: ca[i - 1], type: "same" }); i--; j--;
+        ops.push({ text: ca[i - 1], type: "same" });
+        i--;
+        j--;
       } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        ops.push({ text: cb[j - 1], type: "added" }); j--;
+        ops.push({ text: cb[j - 1], type: "added" });
+        j--;
       } else {
-        ops.push({ text: ca[i - 1], type: "removed" }); i--;
+        ops.push({ text: ca[i - 1], type: "removed" });
+        i--;
       }
     }
     ops.reverse();
@@ -63,21 +105,26 @@
     const fragment = document.createDocumentFragment();
     let sameBuf = "";
     for (const t of tokens) {
-      if (side === "old" && t.type === "added") continue;
-      if (side === "new" && t.type === "removed") continue;
+      if (side === "existing" && t.type === "added") continue;
+      if (side === "scraped" && t.type === "removed") continue;
 
       if (t.type === "same") {
         sameBuf += t.text;
         continue;
       }
 
-      if (sameBuf) { fragment.appendChild(document.createTextNode(sameBuf)); sameBuf = ""; }
+      if (sameBuf) {
+        fragment.appendChild(document.createTextNode(sameBuf));
+        sameBuf = "";
+      }
       const span = document.createElement("span");
       span.textContent = t.text;
       span.className = t.type;
       fragment.appendChild(span);
     }
-    if (sameBuf) fragment.appendChild(document.createTextNode(sameBuf));
+    if (sameBuf) {
+      fragment.appendChild(document.createTextNode(sameBuf));
+    }
     el.replaceChildren(fragment);
   }
 
@@ -95,7 +142,7 @@
     ta.parentNode.insertBefore(wrapper, ta);
     wrapper.appendChild(ta);
 
-    if (side === "new") ta.style.caretColor = cs.color;
+    if (side === "scraped") ta.style.caretColor = cs.color;
 
     return wrapper;
   }
@@ -134,8 +181,6 @@
     ]) {
       content.style[prop] = cs[prop];
     }
-
-    if (DEBUG) content.style.color = "rgba(0, 220, 255, 0.6)";
 
     clip.appendChild(content);
     return { clip, content, totalPadding: padLeft + padRight };
@@ -177,10 +222,10 @@
   }
 
   function setupTagDiff(tagsField, cleanupFns) {
-    const cols = [...tagsField.querySelectorAll("div.col-lg-9 > div.row > div.col-lg-6")];
-    if (cols.length < 2) return;
+    const tagSelects = [...tagsField.querySelectorAll(".tag-select")];
+    if (tagSelects.length < 2) return;
 
-    const [existingCol, scrapedCol] = cols;
+    const [existingCol, scrapedCol] = tagSelects;
 
     applyTagDiff(existingCol, scrapedCol);
 
@@ -188,35 +233,49 @@
     const mo = new MutationObserver(() => applyTagDiff(existingCol, scrapedCol));
     mo.observe(existingCol, { childList: true, subtree: true });
     mo.observe(scrapedCol,  { childList: true, subtree: true });
-    cleanupFns.push(() => mo.disconnect());
+    cleanupFns.push(() => {
+      log("cleanup", "tag diff");
+      mo.disconnect();
+    });
   }
 
   // ── Text diff ───────────────────────────────────────────────────────────────
 
   function setupTextDiff(detailsField, cleanupFns) {
-    const cols = [...detailsField.querySelectorAll("div.col-lg-9 > div.row > div.col-lg-6")];
-    if (cols.length < 2) return;
+    const textareas = [...detailsField.querySelectorAll("textarea")];
+    if (textareas.length < 2) return;
 
-    const existingTA = cols[0].querySelector("textarea");
-    const scrapedTA  = cols[1].querySelector("textarea");
-    if (!existingTA || !scrapedTA) return;
+    const existingTA = textareas[0];
+    const scrapedTA  = textareas[1];
 
-    const oldWrapper = setupTextarea(existingTA, "old");
-    const newWrapper = setupTextarea(scrapedTA, "new");
+    const existingWrapper = setupTextarea(existingTA, "existing");
+    const scrapedWrapper  = setupTextarea(scrapedTA, "scraped");
 
-    const { clip: oldClip, content: oldContent, totalPadding: oldPad } = createOverlay(existingTA);
-    const { clip: newClip, content: newContent, totalPadding: newPad } = createOverlay(scrapedTA);
-    oldWrapper.appendChild(oldClip);
-    newWrapper.appendChild(newClip);
+    const { clip: existingClip, content: existingContent, totalPadding: existingPad } = createOverlay(existingTA);
+    const { clip: scrapedClip,  content: scrapedContent,  totalPadding: scrapedPad  } = createOverlay(scrapedTA);
+    existingWrapper.appendChild(existingClip);
+    scrapedWrapper.appendChild(scrapedClip);
 
-    syncContentWidth(existingTA, oldContent, oldPad);
-    syncContentWidth(scrapedTA,  newContent, newPad);
+    if (_debug) {
+      existingContent.classList.add("sd-debug-content");
+      scrapedContent.classList.add("sd-debug-content");
+    }
+
+    syncContentWidth(existingTA, existingContent, existingPad);
+    syncContentWidth(scrapedTA,  scrapedContent,  scrapedPad);
 
     const update = () => {
-      if (!existingTA.value) return;
+      time("diff");
+      if (!existingTA.value) {
+        timeEnd("diff");
+        return;
+      }
       const tokens = wordDiff(existingTA.value, scrapedTA.value);
-      renderDiff(oldContent, tokens, "old");
-      renderDiff(newContent, tokens, "new");
+      log("diff:computed", tokens.length, "tokens");
+      renderDiff(existingContent, tokens, "existing");
+      renderDiff(scrapedContent,  tokens, "scraped");
+      stats(tokens);
+      timeEnd("diff");
     };
     update();
 
@@ -226,8 +285,8 @@
       debounceId = setTimeout(update, DEBOUNCE_MS);
     };
 
-    const onExistingScroll = () => { oldContent.style.transform = `translateY(-${existingTA.scrollTop}px)`; };
-    const onScrapedScroll  = () => { newContent.style.transform = `translateY(-${scrapedTA.scrollTop}px)`; };
+    const onExistingScroll = () => { existingContent.style.transform = `translateY(-${existingTA.scrollTop}px)`; };
+    const onScrapedScroll  = () => { scrapedContent.style.transform  = `translateY(-${scrapedTA.scrollTop}px)`; };
 
     scrapedTA.addEventListener("input", onInput);
     existingTA.addEventListener("scroll", onExistingScroll);
@@ -235,8 +294,8 @@
 
     let isSyncing = false;
     const ro = new ResizeObserver((entries) => {
-      syncContentWidth(existingTA, oldContent, oldPad);
-      syncContentWidth(scrapedTA,  newContent, newPad);
+      syncContentWidth(existingTA, existingContent, existingPad);
+      syncContentWidth(scrapedTA,  scrapedContent,  scrapedPad);
       if (!isSyncing) {
         isSyncing = true;
         for (const entry of entries) {
@@ -250,6 +309,7 @@
     ro.observe(scrapedTA);
 
     cleanupFns.push(() => {
+      log("cleanup", "text diff");
       ro.disconnect();
       clearTimeout(debounceId);
       scrapedTA.removeEventListener("input", onInput);
@@ -274,24 +334,35 @@
     if (modal.dataset.scrapeDiffInitialized) return true;
     modal.dataset.scrapeDiffInitialized = "true";
 
+    log("modal:detected");
+    time("setup");
     const cleanupFns = [];
-    if (detailsField) setupTextDiff(detailsField, cleanupFns);
-    if (tagsField)    setupTagDiff(tagsField, cleanupFns);
+    if (detailsField) {
+      log("setup:field", "details/synopsis");
+      setupTextDiff(detailsField, cleanupFns);
+    }
+    if (tagsField) {
+      log("setup:field", "tags");
+      setupTagDiff(tagsField, cleanupFns);
+    }
 
     const closeObserver = new MutationObserver(() => {
       if (!modal.isConnected) {
-        cleanupFns.forEach((fn) => fn());
+        for (const fn of cleanupFns) fn();
         closeObserver.disconnect();
       }
     });
     closeObserver.observe(document.body, { childList: true });
 
+    log("setup:complete");
+    timeEnd("setup");
     console.log("[ScrapeDiff] ready");
     return true;
   }
 
   function startPolling() {
     if (pollId) return;
+    log("poll:start");
     pollId = setInterval(() => {
       if (trySetup()) {
         clearInterval(pollId);

@@ -45,3 +45,8 @@
 .react-select__multi-value.sd-tag-added {
   background-color: hsl(120, 35%, 77%) !important;
 }
+
+/* Debug: cyan background for overlay content */
+.sd-debug-content {
+  background-color: rgba(0, 220, 255, 0.15) !important;
+}
