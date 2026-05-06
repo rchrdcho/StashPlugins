@@ -1,6 +1,6 @@
 # ScrapeDiff
 
-Highlights what changed between your existing data and the scraped result in Stash scrape result modals — word-level diff on Details/Synopsis text, and added/removed color coding on tags.
+Highlights what changed between your existing data and the scraped result in Stash scrape result modals — word-level diff on Details/Synopsis text, added/removed color coding on tags, and image resolution display next to accept/reject buttons.
 
 ![ScrapeDiff in Scene scrape modal](assets/scene-scrape.png)
 
@@ -8,6 +8,7 @@ Highlights what changed between your existing data and the scraped result in Sta
 
 - Word-level diff with red (removed) and green (added) highlights on Details/Synopsis
 - Tag diff highlighting — removed tags turn red, added tags turn green
+- Image resolution (W × H) shown next to accept/reject buttons for scene cover, group front/back, and performer images
 - Works across Scene, Gallery, Performer, and Group scrape modals
 - Synchronized height resize — drag either textarea and the other follows
 - Scroll-synced overlays
@@ -35,7 +36,7 @@ Highlights what changed between your existing data and the scraped result in Sta
 
 ## Usage
 
-Open any scrape result modal. The Details/Synopsis field will display a word-level diff, and the Tags field will highlight which tags are new or removed.
+Open any scrape result modal. The Details/Synopsis field will display a word-level diff, the Tags field will highlight which tags are new or removed, and image fields will show the resolution of each image next to the accept/reject button.
 
 No configuration required.
 
@@ -43,4 +44,5 @@ No configuration required.
 
 - Skips the Details/Synopsis diff when the existing field is empty (new data, nothing to diff against)
 - Skips the Tags diff when the existing tags field is empty (new data, nothing to diff against)
+- Performer image carousel updates the resolution display as you navigate between images
 - Cleans up all event listeners and observers when the modal closes

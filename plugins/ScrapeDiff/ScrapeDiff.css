@@ -50,3 +50,8 @@
 .sd-debug-content {
   background-color: rgba(0, 220, 255, 0.15) !important;
 }
+
+.sd-image-info {
+  white-space: nowrap;
+  user-select: none;
+}

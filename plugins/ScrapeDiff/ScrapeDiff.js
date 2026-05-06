@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  console.log("[ScrapeDiff] v1.3.0 loaded");
+  console.log("[ScrapeDiff] v1.4.0 loaded");
 
   // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -191,6 +191,70 @@
     content.style.width = `${ta.clientWidth - totalPadding + frac}px`;
   }
 
+  // ── Image info ──────────────────────────────────────────────────────────────
+
+  function readImageInfo(img, infoEl) {
+    if (img.complete) {
+      infoEl.textContent = img.naturalWidth > 0
+        ? `${img.naturalWidth} × ${img.naturalHeight}`
+        : "—";
+      return;
+    }
+    infoEl.textContent = "";
+    img.addEventListener("load", () => {
+      infoEl.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
+    }, { once: true });
+    img.addEventListener("error", () => {
+      infoEl.textContent = "—";
+    }, { once: true });
+  }
+
+  function attachImageInfo(inputGroup, cleanupFns) {
+    const prepend = inputGroup.querySelector(".input-group-prepend");
+    if (!prepend) return;
+
+    const selParent = inputGroup.querySelector(".image-selection-parent");
+    if (selParent) {
+      const imgDiv = selParent.querySelector(".performer-image");
+      if (!imgDiv) return;
+
+      const infoEl = document.createElement("div");
+      infoEl.className = "sd-image-info input-group-text bg-secondary text-white border-secondary";
+      prepend.after(infoEl);
+
+      const getActive = () => imgDiv.querySelector("img:not(.d-none)");
+      const active = getActive();
+      if (active) readImageInfo(active, infoEl);
+
+      const mo = new MutationObserver(() => {
+        const img = getActive();
+        if (img) readImageInfo(img, infoEl);
+      });
+      mo.observe(imgDiv, { subtree: true, attributes: true, attributeFilter: ["class", "src"] });
+      cleanupFns.push(() => {
+        log("cleanup", "image info");
+        mo.disconnect();
+      });
+      return;
+    }
+
+    const img = inputGroup.querySelector("img.scene-cover, img.group-image, img.performer-image");
+    if (!img) return;
+
+    const infoEl = document.createElement("div");
+    infoEl.className = "sd-image-info input-group-text bg-secondary text-white border-secondary";
+    prepend.after(infoEl);
+
+    readImageInfo(img, infoEl);
+  }
+
+  function setupImageDiff(field, cleanupFns) {
+    for (const col of field.querySelectorAll(".col-lg-6")) {
+      const inputGroup = col.querySelector(".input-group");
+      if (inputGroup) attachImageInfo(inputGroup, cleanupFns);
+    }
+  }
+
   // ── Tag diff ────────────────────────────────────────────────────────────────
 
   function getNamedChips(col) {
@@ -328,7 +392,9 @@
 
     const detailsField = modal.querySelector("[data-field='details'], [data-field='synopsis']");
     const tagsField    = modal.querySelector("[data-field='tags']");
-    if (!detailsField && !tagsField) return false;
+    const IMAGE_FIELDS = ["cover_image", "front_image", "back_image", "image"];
+    const imageFields  = IMAGE_FIELDS.map(n => modal.querySelector(`[data-field="${n}"]`)).filter(Boolean);
+    if (!detailsField && !tagsField && !imageFields.length) return false;
 
     // Already initialized — signal success so polling stops
     if (modal.dataset.scrapeDiffInitialized) return true;
@@ -344,6 +410,10 @@
     if (tagsField) {
       log("setup:field", "tags");
       setupTagDiff(tagsField, cleanupFns);
+    }
+    for (const field of imageFields) {
+      log("setup:field", field.dataset.field);
+      setupImageDiff(field, cleanupFns);
     }
 
     const closeObserver = new MutationObserver(() => {
