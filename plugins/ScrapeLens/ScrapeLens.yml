@@ -1,0 +1,8 @@
+name: ScrapeLens
+description: Live word-level diff for Details/Synopsis, tag highlighting, and image resolution display in Stash scrape result modals.
+version: 1.0.0
+ui:
+  javascript:
+    - ScrapeLens.js
+  css:
+    - ScrapeLens.css
