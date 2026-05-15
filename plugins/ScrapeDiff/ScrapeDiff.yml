@@ -1,7 +1,7 @@
 name: ScrapeDiff
-description: Live word-level diff for Details/Synopsis, tag highlighting, and image resolution display in Stash scrape result modals.
+description: "⚠️ This plugin has been renamed to ScrapeLens. Please install ScrapeLens from the plugin source and remove ScrapeDiff."
 url: https://discourse.stashapp.cc/t/scrapediff/6826
-version: 1.4.0
+version: 1.4.1
 ui:
   javascript:
     - ScrapeDiff.js
