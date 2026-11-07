@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  console.log("[ScrapeLens] v1.0.1 loaded");
+  console.log("[ScrapeLens] v1.1.0 loaded");
 
   // ── Config ────────────────────────────────────────────────────────────────
 
@@ -361,22 +361,18 @@
 
   // ── Core ──────────────────────────────────────────────────────────────────
 
-  let pollId = null;
-
-  function trySetup() {
-    const modal = document.querySelector(".modal-content");
-    if (!modal) return false;
-
+  // Shared by both entry paths. The data attribute is the claim marker: whichever
+  // path reaches a modal first sets it up, the other one leaves it alone.
+  // Returns a cleanup function, or null if the modal has no supported fields.
+  function attach(modal, source) {
     const matches = FIELD_REGISTRY
       .map(({ selector, setup }) => ({ field: modal.querySelector(selector), setup, selector }))
       .filter(({ field }) => field !== null);
 
-    if (!matches.length) return false;
-    // Already initialized — signal success so polling stops
-    if (modal.dataset.scrapeLensInitialized) return true;
+    if (!matches.length) return null;
     modal.dataset.scrapeLensInitialized = "true";
 
-    Debug.log("modal:detected");
+    Debug.log("modal:detected", source);
     Debug.time("setup");
     const cleanupFns = [];
 
@@ -385,17 +381,83 @@
       setup(field, cleanupFns);
     }
 
+    Debug.log("setup:complete");
+    Debug.timeEnd("setup");
+    console.log(`[ScrapeLens] ready (${source})`);
+    return () => { for (const fn of cleanupFns) fn(); };
+  }
+
+  // ── Entry: patch (Stash v0.32+) ───────────────────────────────────────────
+  // SceneScrapeDialog is patchable from v0.32. A hidden sentinel appended to the
+  // dialog body mounts and unmounts with the modal, giving exact lifecycle.
+  // On older versions the patch is registered but never fires, and the DOM
+  // fallback below handles the dialog as before.
+  // Merge modals are patchable too, but their compare step (e.g. SceneMergeDetails)
+  // is not and takes no children, so they stay on the DOM fallback.
+
+  (() => {
+    const api = window.PluginApi;
+    if (!api?.patch?.after || !api.React) return;
+    const { React } = api;
+
+    // Stable component identity so the sentinel is not remounted on every render.
+    function Sentinel() {
+      const ref = React.useRef(null);
+      React.useEffect(() => {
+        const modal = ref.current?.closest(".modal-content");
+        if (!modal || modal.dataset.scrapeLensInitialized) return undefined;
+        const cleanup = attach(modal, "patch");
+        if (!cleanup) return undefined;
+        return () => { Debug.log("cleanup", "patch unmount"); cleanup(); };
+      }, []);
+      return React.createElement("span", { ref, hidden: true });
+    }
+
+    api.patch.after("SceneScrapeDialog", (...args) => {
+      const result = args[args.length - 1];
+      // Only the main ScrapeDialog takes children; the tag link dialog and the
+      // null return on close pass through untouched.
+      if (!React.isValidElement(result) || result.props.children === undefined) return result;
+      return React.cloneElement(
+        result,
+        undefined,
+        result.props.children,
+        React.createElement(Sentinel, { key: "scrape-lens-sentinel" })
+      );
+    });
+  })();
+
+  // ── Entry: DOM fallback (all versions) ────────────────────────────────────
+  // Handles every dialog the patch does not reach: Gallery / Performer / Group
+  // scrape dialogs, merge modals, and all dialogs on Stash before v0.32.
+
+  let pollId = null;
+
+  function stopPolling() {
+    if (!pollId) return;
+    clearInterval(pollId);
+    pollId = null;
+    Debug.log("poll:stop");
+  }
+
+  // Returns true when polling can stop.
+  function trySetup() {
+    const modal = document.querySelector(".modal-content");
+    // Modal closed without ever showing supported fields (or a non-scrape modal)
+    if (!modal) return true;
+    // Already set up, by this path or by the patch
+    if (modal.dataset.scrapeLensInitialized) return true;
+
+    const cleanup = attach(modal, "dom");
+    if (!cleanup) return false;
+
     const closeObserver = new MutationObserver(() => {
       if (!modal.isConnected) {
-        for (const fn of cleanupFns) fn();
+        cleanup();
         closeObserver.disconnect();
       }
     });
     closeObserver.observe(document.body, { childList: true });
-
-    Debug.log("setup:complete");
-    Debug.timeEnd("setup");
-    console.log("[ScrapeLens] ready");
     return true;
   }
 
@@ -403,11 +465,13 @@
     if (pollId) return;
     Debug.log("poll:start");
     pollId = setInterval(() => {
-      if (trySetup()) { clearInterval(pollId); pollId = null; }
+      if (trySetup()) stopPolling();
     }, Config.POLL_INTERVAL_MS);
   }
 
+  // Body children also change while a modal is open (select menus, popovers).
+  // Only an unclaimed modal is worth polling for.
   new MutationObserver(() => {
-    if (!pollId && document.querySelector(".modal-content")) startPolling();
+    if (!pollId && document.querySelector(".modal-content:not([data-scrape-lens-initialized])")) startPolling();
   }).observe(document.body, { childList: true });
 })();

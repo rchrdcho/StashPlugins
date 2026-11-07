@@ -9,7 +9,7 @@ Highlights what changed between your existing data and the scraped result in Sta
 - Word-level diff with red (removed) and green (added) highlights on Details/Synopsis
 - Tag diff highlighting — removed tags turn red, added tags turn green
 - Image resolution (W × H) shown next to accept/reject buttons for scene cover, group front/back, and performer images
-- Works across Scene, Gallery, Performer, and Group scrape modals
+- Works across Scene, Gallery, Performer, and Group scrape modals, and the Scene, Performer, and Tag merge modals
 - Synchronized height resize — drag either textarea and the other follows
 - Live updates as you edit the scraped field
 - No external dependencies, no build step
@@ -38,6 +38,12 @@ Highlights what changed between your existing data and the scraped result in Sta
 Open any scrape result modal. The Details/Synopsis field will display a word-level diff, the Tags field will highlight which tags are new or removed, and image fields will show the resolution of each image next to the accept/reject button.
 
 No configuration required.
+
+## Compatibility
+
+- Requires Stash **v0.30.0** or later
+- On **v0.32.0+**, the Scene scrape modal is handled through Stash's official plugin patch API; all other modals (Gallery, Performer, Group, merge) use DOM detection
+- On v0.30.x–v0.31.x, all modals use DOM detection — same features, no difference in behavior
 
 ## Notes
 
